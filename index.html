@@ -486,43 +486,96 @@
       ctx.restore();
     }
 
-    /* ─── Spin Logic ─── */
+    /* ─── Spin Logic — Tension Waves ─── */
     function spin() {
       if (spinning) return;
       spinning = true;
       spinBtn.disabled = true;
 
-      // random velocity between 15-30 rad/s
-      let velocity = 15 + Math.random() * 15;
-      const friction = 0.985;     // deceleration
-      const minVelocity = 0.002;
       const arc = (2 * Math.PI) / SEGMENT_COUNT;
       let lastBucket = -1;
 
-      function frame() {
-        velocity *= friction;
-        currentAngle += velocity * 0.016;   // ~60 fps step
+      /*
+       * Build a timeline of tension "waves".
+       * Each wave = { duration (ms), peakSpeed (rad/s) }
+       * Pattern: fast → slow → fast → slow → … → ABRUPT STOP
+       * 3-5 waves, each with random peak speed & duration.
+       */
+      const waveCount = 3 + Math.floor(Math.random() * 3);   // 3-5 waves
+      const waves = [];
+      for (let i = 0; i < waveCount; i++) {
+        const isFast = i % 2 === 0;
+        waves.push({
+          duration: isFast
+            ? 800  + Math.random() * 700     // fast waves: 0.8-1.5 s
+            : 600  + Math.random() * 800,    // slow waves: 0.6-1.4 s
+          peakSpeed: isFast
+            ? 14 + Math.random() * 16        // fast peak: 14-30 rad/s
+            : 3  + Math.random() * 4         // slow peak:  3-7  rad/s
+        });
+      }
+
+      // Final "tease" wave — very slow, short, then SNAP stop
+      waves.push({
+        duration: 400 + Math.random() * 500,   // 0.4-0.9 s
+        peakSpeed: 1.5 + Math.random() * 2.5   // barely crawling
+      });
+
+      const totalDuration = waves.reduce((s, w) => s + w.duration, 0);
+      const startTime = performance.now();
+
+      // Pre-pick a random winner for true randomness
+      const winnerIdx = Math.floor(Math.random() * SEGMENT_COUNT);
+
+      function getSpeedAt(elapsed) {
+        /*  Walk through waves; within each wave use a sine curve
+         *  so speed ramps up then ramps back down smoothly.  */
+        let cumulative = 0;
+        for (const w of waves) {
+          if (elapsed < cumulative + w.duration) {
+            const t = (elapsed - cumulative) / w.duration;       // 0→1 within wave
+            return w.peakSpeed * Math.sin(t * Math.PI);          // sine bell
+          }
+          cumulative += w.duration;
+        }
+        return 0;  // past all waves → stop
+      }
+
+      let prevTime = startTime;
+
+      function frame(now) {
+        const elapsed = now - startTime;
+        const dt = Math.min((now - prevTime) / 1000, 0.05);     // delta seconds, capped
+        prevTime = now;
+
+        const speed = getSpeedAt(elapsed);
+        currentAngle += speed * dt;
 
         // pointer tick
         const bucket = Math.floor((((-currentAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)) / arc);
         if (bucket !== lastBucket) {
           lastBucket = bucket;
           pointer.classList.remove('bounce');
-          void pointer.offsetWidth; // reflow
+          void pointer.offsetWidth;
           pointer.classList.add('bounce');
         }
 
         drawWheel();
 
-        if (velocity < minVelocity) {
+        if (elapsed >= totalDuration) {
+          /*  Snap to the pre-picked random winner.
+           *  Calculate the target angle so the winner segment
+           *  sits right under the pointer (top center).  */
+          const targetAngle = -(winnerIdx * arc + arc / 2 + Math.PI / 2);
+          // Normalise into the nearest forward position
+          const norm = ((targetAngle - currentAngle) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+          currentAngle += norm;
+
+          drawWheel();
           cancelAnimationFrame(animId);
           spinning = false;
           spinBtn.disabled = false;
-
-          // determine winner — pointer is at top (angle = -π/2 from right)
-          const norm = (((-currentAngle - Math.PI / 2) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-          const idx  = Math.floor(norm / arc) % SEGMENT_COUNT;
-          showResult(getLabels()[idx]);
+          showResult(getLabels()[winnerIdx]);
           return;
         }
 
