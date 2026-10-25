@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpinDrop — Random Spin Wheel Picker</title>
+  <meta name="description" content="Customize your spin wheel with 6 options and let fate decide! A free, beautiful random picker wheel." />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Base ── */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-dark: #0b0e17;
+      --surface: rgba(255, 255, 255, 0.04);
+      --glass: rgba(255, 255, 255, 0.06);
+      --glass-border: rgba(255, 255, 255, 0.10);
+      --text: #e8eaf0;
+      --text-muted: #8b8fa3;
+      --accent: #a78bfa;
+      --accent-glow: rgba(167, 139, 250, 0.35);
+      --seg1: #f472b6; --seg2: #fb923c; --seg3: #facc15;
+      --seg4: #34d399; --seg5: #60a5fa; --seg6: #a78bfa;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg-dark);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Animated Background ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 600px 400px at 20% 30%, rgba(167,139,250,0.12), transparent),
+        radial-gradient(ellipse 500px 500px at 80% 70%, rgba(244,114,182,0.10), transparent),
+        radial-gradient(ellipse 400px 300px at 50% 90%, rgba(96,165,250,0.08), transparent);
+      z-index: 0;
+      pointer-events: none;
+      animation: bgPulse 8s ease-in-out infinite alternate;
+    }
+
+    @keyframes bgPulse {
+      0%   { opacity: .7; }
+      100% { opacity: 1; }
+    }
+
+    /* ── Layout ── */
+    .container {
+      position: relative; z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2.5rem;
+    }
+
+    /* ── Header ── */
+    header { text-align: center; }
+
+    header h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--seg6), var(--seg1), var(--seg3));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.5px;
+    }
+
+    header p {
+      margin-top: .5rem;
+      color: var(--text-muted);
+      font-size: 1.05rem;
+    }
+
+    /* ── Main Grid ── */
+    .main {
+      display: flex;
+      gap: 2.5rem;
+      align-items: flex-start;
+      justify-content: center;
+      flex-wrap: wrap;
+      width: 100%;
+    }
+
+    /* ── Wheel Section ── */
+    .wheel-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .wheel-wrapper {
+      position: relative;
+      width: 370px; height: 370px;
+    }
+
+    /* Outer glow ring */
+    .wheel-wrapper::before {
+      content: '';
+      position: absolute;
+      inset: -12px;
+      border-radius: 50%;
+      border: 3px solid var(--glass-border);
+      background: radial-gradient(circle, rgba(167,139,250,0.06), transparent 70%);
+      animation: ringPulse 3s ease-in-out infinite alternate;
+    }
+
+    @keyframes ringPulse {
+      0%   { box-shadow: 0 0 20px var(--accent-glow); }
+      100% { box-shadow: 0 0 50px var(--accent-glow), 0 0 80px rgba(244,114,182,0.12); }
+    }
+
+    canvas#wheelCanvas {
+      width: 370px; height: 370px;
+      border-radius: 50%;
+      filter: drop-shadow(0 8px 32px rgba(0,0,0,0.45));
+      cursor: pointer;
+      transition: filter .3s;
+    }
+
+    canvas#wheelCanvas:hover {
+      filter: drop-shadow(0 8px 40px rgba(167,139,250,0.4));
+    }
+
+    /* Pointer triangle */
+    .pointer {
+      position: absolute;
+      top: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0; height: 0;
+      border-left: 16px solid transparent;
+      border-right: 16px solid transparent;
+      border-top: 30px solid var(--accent);
+      filter: drop-shadow(0 4px 10px var(--accent-glow));
+      z-index: 5;
+      transition: transform .15s;
+    }
+
+    .pointer.bounce {
+      animation: pointerBounce .15s ease;
+    }
+
+    @keyframes pointerBounce {
+      0%,100% { transform: translateX(-50%) translateY(0); }
+      50%     { transform: translateX(-50%) translateY(4px); }
+    }
+
+    /* Center hub */
+    .center-hub {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 60px; height: 60px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #1e1e2e, #2a2a3d);
+      border: 3px solid var(--glass-border);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: .75rem; color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      z-index: 4;
+      pointer-events: none;
+    }
+
+    /* Spin Button */
+    #spinBtn {
+      padding: .85rem 2.6rem;
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: .5px;
+      color: #fff;
+      border: none;
+      border-radius: 60px;
+      background: linear-gradient(135deg, var(--accent), #7c3aed);
+      cursor: pointer;
+      box-shadow: 0 4px 24px var(--accent-glow);
+      transition: transform .2s, box-shadow .2s;
+    }
+
+    #spinBtn:hover:not(:disabled) {
+      transform: translateY(-2px) scale(1.03);
+      box-shadow: 0 6px 32px rgba(167,139,250,0.5);
+    }
+
+    #spinBtn:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+
+    /* ── Editor Panel ── */
+    .editor-panel {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 1.75rem;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      width: 340px;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .editor-panel h2 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .input-group {
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+    }
+
+    .color-dot {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      box-shadow: 0 0 8px rgba(255,255,255,0.08);
+    }
+
+    .input-group input {
+      flex: 1;
+      padding: .6rem .85rem;
+      font-family: 'Outfit', sans-serif;
+      font-size: .95rem;
+      color: var(--text);
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      outline: none;
+      transition: border-color .25s, box-shadow .25s;
+    }
+
+    .input-group input::placeholder { color: var(--text-muted); }
+
+    .input-group input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(167,139,250,0.15);
+    }
+
+    /* ── Result Modal ── */
+    .result-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .35s;
+    }
+
+    .result-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .result-card {
+      background: linear-gradient(145deg, rgba(30,30,50,0.95), rgba(18,18,30,0.98));
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 2.5rem 3rem;
+      text-align: center;
+      transform: scale(.85);
+      transition: transform .35s cubic-bezier(.34,1.56,.64,1);
+      max-width: 400px;
+      width: 90%;
+    }
+
+    .result-overlay.show .result-card {
+      transform: scale(1);
+    }
+
+    .result-card .label {
+      font-size: .9rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: .5rem;
+    }
+
+    .result-card .value {
+      font-size: 2rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--seg6), var(--seg1));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      word-break: break-word;
+    }
+
+    .result-card button {
+      margin-top: 1.5rem;
+      padding: .6rem 2rem;
+      font-family: 'Outfit', sans-serif;
+      font-size: .95rem;
+      font-weight: 600;
+      color: var(--text);
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 40px;
+      cursor: pointer;
+      transition: background .2s;
+    }
+
+    .result-card button:hover {
+      background: rgba(255,255,255,0.13);
+    }
+
+    /* ── Confetti Canvas ── */
+    #confettiCanvas {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      z-index: 99;
+      pointer-events: none;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 780px) {
+      .main { flex-direction: column; align-items: center; }
+      .editor-panel { width: min(340px, 100%); }
+      .wheel-wrapper { width: 300px; height: 300px; }
+      canvas#wheelCanvas { width: 300px; height: 300px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>SpinDrop</h1>
+      <p>Customise the 6 slots, hit spin &amp; let fate decide ✨</p>
+    </header>
+
+    <div class="main">
+      <!-- Wheel -->
+      <div class="wheel-section">
+        <div class="wheel-wrapper">
+          <div class="pointer" id="pointer"></div>
+          <canvas id="wheelCanvas" width="740" height="740"></canvas>
+          <div class="center-hub">Spin</div>
+        </div>
+        <button id="spinBtn">🎯 Spin the Wheel</button>
+      </div>
+
+      <!-- Editor -->
+      <div class="editor-panel">
+        <h2>✏️ Edit Segments</h2>
+        <div class="input-group">
+          <span class="color-dot" style="background:var(--seg1)"></span>
+          <input id="seg0" type="text" maxlength="24" placeholder="Option 1" value="Pizza 🍕" />
+        </div>
+        <div class="input-group">
+          <span class="color-dot" style="background:var(--seg2)"></span>
+          <input id="seg1" type="text" maxlength="24" placeholder="Option 2" value="Burger 🍔" />
+        </div>
+        <div class="input-group">
+          <span class="color-dot" style="background:var(--seg3)"></span>
+          <input id="seg2" type="text" maxlength="24" placeholder="Option 3" value="Sushi 🍣" />
+        </div>
+        <div class="input-group">
+          <span class="color-dot" style="background:var(--seg4)"></span>
+          <input id="seg3" type="text" maxlength="24" placeholder="Option 4" value="Tacos 🌮" />
+        </div>
+        <div class="input-group">
+          <span class="color-dot" style="background:var(--seg5)"></span>
+          <input id="seg4" type="text" maxlength="24" placeholder="Option 5" value="Ramen 🍜" />
+        </div>
+        <div class="input-group">
+          <span class="color-dot" style="background:var(--seg6)"></span>
+          <input id="seg5" type="text" maxlength="24" placeholder="Option 6" value="Pasta 🍝" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result Overlay -->
+  <div class="result-overlay" id="resultOverlay">
+    <div class="result-card">
+      <div class="label">The wheel chose</div>
+      <div class="value" id="resultValue">—</div>
+      <button id="closeResult">Close</button>
+    </div>
+  </div>
+
+  <!-- Confetti Canvas -->
+  <canvas id="confettiCanvas"></canvas>
+
+  <script>
+    /* ─── Config ─── */
+    const SEGMENT_COUNT = 6;
+    const COLORS = ['#f472b6','#fb923c','#facc15','#34d399','#60a5fa','#a78bfa'];
+    const DARK_TEXT = '#1a1a2e';
+    const LIGHT_TEXT = '#f0f0f5';
+
+    /* ─── DOM ─── */
+    const canvas  = document.getElementById('wheelCanvas');
+    const ctx     = canvas.getContext('2d');
+    const spinBtn = document.getElementById('spinBtn');
+    const pointer = document.getElementById('pointer');
+    const overlay = document.getElementById('resultOverlay');
+    const resultVal = document.getElementById('resultValue');
+    const closeBtn  = document.getElementById('closeResult');
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const confettiCtx    = confettiCanvas.getContext('2d');
+
+    const inputs = Array.from({ length: SEGMENT_COUNT }, (_, i) => document.getElementById('seg' + i));
+
+    /* ─── State ─── */
+    let currentAngle = 0;   // radians the wheel has rotated
+    let spinning = false;
+    let animId = null;
+
+    /* ─── Helpers ─── */
+    function getLabels() {
+      return inputs.map((inp, i) => inp.value.trim() || `Option ${i + 1}`);
+    }
+
+    function textColor(hex) {
+      // luminance check
+      const r = parseInt(hex.slice(1,3),16);
+      const g = parseInt(hex.slice(3,5),16);
+      const b = parseInt(hex.slice(5,7),16);
+      return (r*0.299 + g*0.587 + b*0.114) > 160 ? DARK_TEXT : LIGHT_TEXT;
+    }
+
+    /* ─── Draw Wheel ─── */
+    function drawWheel() {
+      const w = canvas.width;
+      const h = canvas.height;
+      const cx = w / 2;
+      const cy = h / 2;
+      const r  = cx - 8;
+      const arc = (2 * Math.PI) / SEGMENT_COUNT;
+      const labels = getLabels();
+
+      ctx.clearRect(0, 0, w, h);
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(currentAngle);
+
+      for (let i = 0; i < SEGMENT_COUNT; i++) {
+        const startA = i * arc;
+        const endA   = startA + arc;
+
+        // segment
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, r, startA, endA);
+        ctx.closePath();
+        ctx.fillStyle = COLORS[i];
+        ctx.fill();
+
+        // subtle border
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+        ctx.stroke();
+
+        // text
+        ctx.save();
+        ctx.rotate(startA + arc / 2);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = textColor(COLORS[i]);
+        ctx.font = '700 26px Outfit, sans-serif';
+        const txt = labels[i].length > 14 ? labels[i].slice(0, 13) + '…' : labels[i];
+        ctx.fillText(txt, r - 28, 9);
+        ctx.restore();
+      }
+
+      ctx.restore();
+    }
+
+    /* ─── Spin Logic ─── */
+    function spin() {
+      if (spinning) return;
+      spinning = true;
+      spinBtn.disabled = true;
+
+      // random velocity between 15-30 rad/s
+      let velocity = 15 + Math.random() * 15;
+      const friction = 0.985;     // deceleration
+      const minVelocity = 0.002;
+      const arc = (2 * Math.PI) / SEGMENT_COUNT;
+      let lastBucket = -1;
+
+      function frame() {
+        velocity *= friction;
+        currentAngle += velocity * 0.016;   // ~60 fps step
+
+        // pointer tick
+        const bucket = Math.floor((((-currentAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)) / arc);
+        if (bucket !== lastBucket) {
+          lastBucket = bucket;
+          pointer.classList.remove('bounce');
+          void pointer.offsetWidth; // reflow
+          pointer.classList.add('bounce');
+        }
+
+        drawWheel();
+
+        if (velocity < minVelocity) {
+          cancelAnimationFrame(animId);
+          spinning = false;
+          spinBtn.disabled = false;
+
+          // determine winner — pointer is at top (angle = -π/2 from right)
+          const norm = (((-currentAngle - Math.PI / 2) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+          const idx  = Math.floor(norm / arc) % SEGMENT_COUNT;
+          showResult(getLabels()[idx]);
+          return;
+        }
+
+        animId = requestAnimationFrame(frame);
+      }
+
+      animId = requestAnimationFrame(frame);
+    }
+
+    /* ─── Result & Confetti ─── */
+    function showResult(text) {
+      resultVal.textContent = text;
+      overlay.classList.add('show');
+      launchConfetti();
+    }
+
+    closeBtn.addEventListener('click', () => overlay.classList.remove('show'));
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('show'); });
+
+    /* ─── Confetti ─── */
+    function launchConfetti() {
+      confettiCanvas.width  = window.innerWidth;
+      confettiCanvas.height = window.innerHeight;
+      const pieces = [];
+
+      for (let i = 0; i < 120; i++) {
+        pieces.push({
+          x: Math.random() * confettiCanvas.width,
+          y: Math.random() * -confettiCanvas.height,
+          w: 6 + Math.random() * 6,
+          h: 4 + Math.random() * 4,
+          color: COLORS[Math.floor(Math.random() * COLORS.length)],
+          vy: 2 + Math.random() * 4,
+          vx: -1 + Math.random() * 2,
+          rot: Math.random() * Math.PI * 2,
+          rv: (Math.random() - .5) * .15,
+          opacity: 1
+        });
+      }
+
+      let frame = 0;
+      function draw() {
+        confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+        let alive = false;
+
+        for (const p of pieces) {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.rot += p.rv;
+          if (frame > 60) p.opacity -= 0.012;
+          if (p.opacity <= 0) continue;
+          alive = true;
+
+          confettiCtx.save();
+          confettiCtx.globalAlpha = Math.max(0, p.opacity);
+          confettiCtx.translate(p.x, p.y);
+          confettiCtx.rotate(p.rot);
+          confettiCtx.fillStyle = p.color;
+          confettiCtx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+          confettiCtx.restore();
+        }
+
+        frame++;
+        if (alive) requestAnimationFrame(draw);
+        else confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    /* ─── Events ─── */
+    spinBtn.addEventListener('click', spin);
+    canvas.addEventListener('click', spin);
+
+    inputs.forEach(inp => inp.addEventListener('input', () => { if (!spinning) drawWheel(); }));
+
+    window.addEventListener('resize', () => {
+      confettiCanvas.width  = window.innerWidth;
+      confettiCanvas.height = window.innerHeight;
+    });
+
+    /* ─── Init ─── */
+    drawWheel();
+  </script>
+</body>
+</html>
